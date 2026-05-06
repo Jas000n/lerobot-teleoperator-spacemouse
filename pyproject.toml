@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lerobot_teleoperator_spacemouse"
-version = "0.1.2"
+version = "0.1.4"
 description = "SpaceMouse teleoperation plugin and Cartesian control adapters for LeRobot."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -12,7 +12,7 @@ license = "Apache-2.0"
 authors = [
     { name = "Shunyu Yao" },
 ]
-keywords = ["lerobot", "spacemouse", "3dconnexion", "teleoperation", "robotics", "soarm"]
+keywords = ["lerobot", "spacemouse", "3dconnexion", "teleoperation", "robotics", "soarm", "so101", "dexterous-manipulation", "precise-teleoperation", "robot-arm", "inverse-kinematics"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -23,7 +23,7 @@ classifiers = [
 ]
 dependencies = [
     "lerobot[feetech,kinematics]>=0.5.0",
-    "numpy>=2.0.0,<2.3.0",
+    "numpy>=2.0.0",
     "pyspacemouse>=1.1.5,<3.0.0",
 ]
 
