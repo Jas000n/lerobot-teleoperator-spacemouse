@@ -1,53 +1,146 @@
-# LeRobot SpaceMouse Teleoperator
+# lerobot-teleoperator-spacemouse
 
-`lerobot-teleoperator-spacemouse` is a LeRobot third-party teleoperator package for 3Dconnexion SpaceMouse devices.
+[![PyPI](https://img.shields.io/pypi/v/lerobot-teleoperator-spacemouse)](https://pypi.org/project/lerobot-teleoperator-spacemouse/)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/pypi/pyversions/lerobot-teleoperator-spacemouse)](https://pypi.org/project/lerobot-teleoperator-spacemouse/)
 
-Install it with:
+A [LeRobot](https://github.com/huggingface/lerobot) plugin that turns a [3Dconnexion SpaceMouse](https://3dconnexion.com/spacemouse) into a 6-DoF robot teleoperator.
+
+Push the puck to move the end-effector in X/Y/Z. Tilt/twist to rotate. Press the side buttons to open or close the gripper. Works out of the box with SO-101 / SO-ARM follower robots via built-in inverse kinematics, and supports any custom URDF through a profile API.
+
+---
+
+## Features
+
+- **6-DoF teleoperation** — translation and rotation deltas from SpaceMouse physical axes
+- **IK mode** — converts end-effector targets to joint commands using LeRobot's `RobotKinematics` and a bundled SO-101 URDF (no calibration file needed)
+- **Direct EEF mode** — passes Cartesian targets straight to robots that already accept `ee.*` action keys
+- **Gripper control** — left/right buttons open and close the gripper at a configurable speed
+- **Axis remapping & sign flip** — remap any physical SpaceMouse axis to any robot axis; flip signs per axis
+- **Deadzone & timeout** — configurable deadzone and input-stale timeout prevent drift when the puck is released
+- **Workspace clamping** — optional per-axis position limits and max-step rate limiter
+- **Custom robot profiles** — register your own URDF + frame + motor list at runtime
+
+---
+
+## Installation
 
 ```bash
-pip install "lerobot-teleoperator-spacemouse[soarm]"
+pip install lerobot-teleoperator-spacemouse
 ```
 
-The main user entry point is the stock LeRobot command:
+SO-101 / SO-ARM IK support is included by default. For other robot families (e.g. Dynamixel-based arms), register a custom kinematics profile — see [Extending to Other Robots](#extending-to-other-robots).
+
+---
+
+## Quick Start
+
+### SO-101 follower over USB
 
 ```bash
 lerobot-teleoperate \
+  --robot.type=so101_follower \
+  --robot.port=/dev/ttyACM0 \
+  --robot.id=my_robot \
   --teleop.type=spacemouse \
-  ...
+  --teleop.adapter.mode=ik \
+  --fps=60
 ```
 
-This package also exposes `lerobot-teleoperator-spacemouse-test` for device diagnostics.
+### Conservative first run (smaller steps, display enabled)
 
-The PyPI install name is hyphenated, but the package metadata and Python module use
-`lerobot_teleoperator_spacemouse` so stock LeRobot releases can auto-discover it through their
-existing `lerobot_teleoperator_` plugin prefix.
+```bash
+lerobot-teleoperate \
+  --robot.type=so101_follower \
+  --robot.port=/dev/ttyACM0 \
+  --robot.id=my_robot \
+  --teleop.type=spacemouse \
+  --teleop.adapter.mode=ik \
+  --teleop.deadzone=0.1 \
+  --teleop.input_timeout_s=0.08 \
+  --teleop.adapter.translation_step_m=0.001 \
+  --teleop.adapter.rotation_step_rad=0.005 \
+  --display_data=true
+```
 
-## What it does
+### Test your SpaceMouse (no robot needed)
 
-- Reads 6-DoF SpaceMouse input through `pyspacemouse`.
-- Emits LeRobot teleoperator actions: `target_x/y/z`, `target_wx/wy/wz`, `gripper_vel`, `enabled`.
-- Converts SpaceMouse deltas to end-effector targets.
-- For SO-101 follower, converts end-effector targets to joint commands through LeRobot's `RobotKinematics`
-  and a bundled kinematics-only URDF.
-- Leaves a direct end-effector mode and a custom IK profile path for future robot extensions.
+```bash
+lerobot-teleoperator-spacemouse-test
+```
 
-## Linux HID setup
+This prints raw SpaceMouse state for 30 seconds so you can verify axes and buttons before connecting a robot.
 
-If the SpaceMouse cannot be opened, install the HID shared library first.
+---
 
-For conda environments:
+## Configuration Reference
+
+All options are set via `--teleop.<option>` or `--teleop.adapter.<option>` on the command line.
+
+### Teleoperator options (`--teleop.*`)
+
+| Option | Default | Description |
+|---|---|---|
+| `device` | `None` | HID device path. Auto-detected when `None`. |
+| `deadzone` | `0.08` | Ignore inputs below this fraction of full deflection. |
+| `rescale_after_deadzone` | `True` | Rescale remaining range to `[0, 1]` after deadzone. |
+| `max_axis_value` | `1.0` | Clamp raw axis values to `[-max, max]`. |
+| `input_timeout_s` | `0.08` | Zero-out input if no new state arrives within this window (seconds). |
+| `read_drain_count` | `32` | Max HID reads per `get_action()` call to drain the queue. |
+| `x_axis` | `"y"` | SpaceMouse attribute name mapped to robot `target_x`. |
+| `y_axis` | `"x"` | SpaceMouse attribute name mapped to robot `target_y`. |
+| `z_axis` | `"z"` | SpaceMouse attribute name mapped to robot `target_z`. |
+| `wx_axis` | `"roll"` | SpaceMouse attribute name mapped to robot `target_wx`. |
+| `wy_axis` | `"pitch"` | SpaceMouse attribute name mapped to robot `target_wy`. |
+| `wz_axis` | `"yaw"` | SpaceMouse attribute name mapped to robot `target_wz`. |
+| `x_sign` | `1.0` | Sign multiplier for `target_x`. Use `-1.0` to flip. |
+| `y_sign` | `-1.0` | Sign multiplier for `target_y`. |
+| `z_sign` | `1.0` | Sign multiplier for `target_z`. |
+| `wx_sign` | `1.0` | Sign multiplier for `target_wx`. |
+| `wy_sign` | `1.0` | Sign multiplier for `target_wy`. |
+| `wz_sign` | `1.0` | Sign multiplier for `target_wz`. |
+| `use_gripper` | `True` | Enable gripper button control. |
+| `gripper_open_button` | `1` | Button index that opens the gripper. |
+| `gripper_close_button` | `0` | Button index that closes the gripper. |
+| `require_enable_button` | `False` | Require a dedicated button to enable motion. |
+| `idle_enabled` | `False` | Whether `enabled=True` is sent when the device is idle. |
+
+### Adapter options (`--teleop.adapter.*`)
+
+| Option | Default | Description |
+|---|---|---|
+| `mode` | `"auto"` | `"ik"`, `"eef"`, or `"auto"` (uses `"eef"` if robot exposes `ee.*` keys). |
+| `robot_profile` | `"so101_follower"` | Built-in kinematics profile. Use `"custom"` to supply your own URDF. |
+| `translation_step_m` | `0.001` | End-effector translation per frame at full SpaceMouse deflection (meters). |
+| `rotation_step_rad` | `0.005` | End-effector rotation per frame at full deflection (radians). |
+| `workspace_min` | `None` | `[x, y, z]` lower workspace bound (meters). |
+| `workspace_max` | `None` | `[x, y, z]` upper workspace bound (meters). |
+| `max_ee_step_m` | `0.02` | Maximum allowed end-effector step per frame (rate limiter). |
+| `position_weight` | `1.0` | IK position tracking weight. |
+| `orientation_weight` | `0.01` | IK orientation tracking weight. |
+| `gripper_speed_factor` | `2.0` | Gripper velocity → position integration scale. |
+| `gripper_min` | `0.0` | Gripper position lower bound (normalized joint units). |
+| `gripper_max` | `100.0` | Gripper position upper bound (normalized joint units). |
+
+---
+
+## Linux HID Setup
+
+The SpaceMouse uses the hidraw subsystem. On Linux you need the shared library and a udev rule.
+
+**conda environment:**
 
 ```bash
 conda install -c conda-forge libhidapi
 ```
 
-For Debian/Ubuntu system Python environments:
+**Debian / Ubuntu system Python:**
 
 ```bash
 sudo apt-get install libhidapi-hidraw0 libhidapi-dev
 ```
 
-Then add udev permissions:
+**udev rule (allows non-root access):**
 
 ```bash
 sudo tee /etc/udev/rules.d/99-spacemouse-hidraw.rules >/dev/null <<'EOF'
@@ -58,59 +151,13 @@ sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
 
-Unplug and replug the SpaceMouse. Log out and back in after changing groups.
+Unplug and replug the SpaceMouse. Log out and back in after the group change.
 
-## Test the device
+---
 
-```bash
-lerobot-teleoperator-spacemouse-test
-```
+## Extending to Other Robots
 
-## SO-ARM teleoperation
-
-Example for SO-101:
-
-```bash
-lerobot-teleoperate \
-  --robot.type=so101_follower \
-  --robot.port=/dev/ttyACM0 \
-  --robot.id=black \
-  --teleop.type=spacemouse \
-  --teleop.adapter.mode=ik \
-  --fps=60
-```
-
-Recommended first run with a conservative step size:
-
-```bash
-lerobot-teleoperate \
-  --robot.type=so101_follower \
-  --robot.port=/dev/ttyACM0 \
-  --robot.id=black \
-  --teleop.type=spacemouse \
-  --teleop.adapter.mode=ik \
-  --teleop.deadzone=0.1 \
-  --teleop.input_timeout_s=0.08 \
-  --teleop.read_drain_count=32 \
-  --teleop.adapter.translation_step_m=0.001 \
-  --teleop.adapter.rotation_step_rad=0.005 \
-  --display_data=true
-```
-
-By default, `--teleop.adapter.robot_profile=so101_follower` uses the bundled
-`so101_new_calib.urdf`. Override `--teleop.adapter.urdf_path=...` only when you have a calibrated
-URDF you want to use instead.
-
-By default, SpaceMouse physical X/Y input is swapped so forward/back drives robot `target_x` and
-left/right drives robot `target_y`. Tune signs with `--teleop.x_sign=-1`, `--teleop.y_sign=-1`,
-etc. if the motion direction is reversed.
-If the arm continues moving after you release the SpaceMouse, increase `--teleop.deadzone` or lower
-`--teleop.input_timeout_s`. If it moves too far per push, lower
-`--teleop.adapter.translation_step_m` and `--teleop.adapter.rotation_step_rad`.
-
-## Extending Other Robots
-
-Other arms are intentionally not wired in yet. For a one-off custom arm, use:
+### One-off custom URDF
 
 ```bash
 lerobot-teleoperate \
@@ -118,42 +165,57 @@ lerobot-teleoperate \
   --teleop.adapter.mode=ik \
   --teleop.adapter.robot_profile=custom \
   --teleop.adapter.urdf_path=/path/to/robot.urdf \
-  --teleop.adapter.target_frame_name=your_tip_frame \
-  ...
+  --teleop.adapter.target_frame_name=gripper_tip \
+  --teleop.adapter.motor_names='["joint1","joint2","joint3","joint4","joint5","gripper"]' \
+  --teleop.adapter.gripper_name=gripper
 ```
 
-Custom IK profiles also need `--teleop.adapter.motor_names=...` and
-`--teleop.adapter.gripper_name=...` when they differ from the SO-101 defaults.
+### Reusable profile (Python)
 
-For a reusable extension, register a `KinematicsProfile` from Python with
-`lerobot_teleoperator_spacemouse.profiles.register_kinematics_profile()`.
+Register a profile from your own package and it becomes available as a named `robot_profile`:
 
-## Blackwell / RTX PRO 6000 note
+```python
+from lerobot_teleoperator_spacemouse.profiles import KinematicsProfile, register_kinematics_profile
 
-For Blackwell GPUs, prefer a PyTorch wheel with CUDA 12.8 or newer. A LeRobot-compatible stable option is:
-
-```bash
-pip install torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0 \
-  --index-url https://download.pytorch.org/whl/cu128
+register_kinematics_profile(
+    "my_arm",
+    KinematicsProfile(
+        urdf_resource=None,           # set urdf_path on the adapter instead
+        target_frame_name="tip_link",
+        motor_names=("j1", "j2", "j3", "j4", "j5", "gripper"),
+        gripper_name="gripper",
+    ),
+)
 ```
 
-Check the environment:
+Then use `--teleop.adapter.robot_profile=my_arm`.
+
+---
+
+## Troubleshooting
+
+**Arm keeps moving after releasing the SpaceMouse** — Increase `--teleop.deadzone` (e.g. `0.15`) or lower `--teleop.input_timeout_s` (e.g. `0.05`).
+
+**Motion is too fast / too slow** — Tune `--teleop.adapter.translation_step_m` and `--teleop.adapter.rotation_step_rad`.
+
+**Axis direction is wrong** — Flip the sign: `--teleop.x_sign=-1`, `--teleop.y_sign=-1`, etc.
+
+**Device not found / permission denied** — Run `lerobot-teleoperator-spacemouse-test` first. Follow the [Linux HID Setup](#linux-hid-setup) section if it fails.
+
+---
+
+## Development
 
 ```bash
-python - <<'PY'
-import torch
-print(torch.__version__, torch.version.cuda)
-print(torch.cuda.is_available())
-print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "no cuda")
-PY
-```
-
-## Package development
-
-```bash
-conda activate lerobot-spacemouse
-pip install -e ".[dev,soarm]"
+git clone https://github.com/Jas000n/lerobot-teleoperator-spacemouse.git
+cd lerobot-teleoperator-spacemouse
+pip install -e ".[dev]"
 pytest
-python -m build
-twine upload dist/*
 ```
+
+
+---
+
+## License
+
+Apache 2.0.
