@@ -8,6 +8,7 @@ A [LeRobot](https://github.com/huggingface/lerobot) plugin that turns a [3Dconne
 
 Push the puck to move the end-effector in X/Y/Z. Tilt/twist to rotate. Press the side buttons to open or close the gripper. Works out of the box with SO-101 / SO-ARM follower robots via built-in inverse kinematics, and supports any custom URDF through a profile API.
 
+SpaceMouse teleoperation is particularly useful for fine-grained manipulation: its compact form factor and incremental Cartesian input allow precise end-effector adjustments without the workspace and hardware footprint of a conventional leader arm.
 ---
 
 ## Features
