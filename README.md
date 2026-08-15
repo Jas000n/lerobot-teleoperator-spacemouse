@@ -31,7 +31,7 @@ SpaceMouse teleoperation is particularly useful for fine-grained manipulation: i
 pip install lerobot-teleoperator-spacemouse
 ```
 
-SO-101 / SO-ARM IK support is included by default. For other robot families (e.g. Dynamixel-based arms), register a custom kinematics profile — see [Extending to Other Robots](#extending-to-other-robots).
+SO-101 / SO-ARM IK support is included by default. Other URDF-described robots can be used by providing a custom kinematics profile — see [Extending to Other Robots](#extending-to-other-robots).
 
 ---
 
