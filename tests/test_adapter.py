@@ -2,15 +2,17 @@ from pathlib import Path
 
 import numpy as np
 from lerobot.processor.converters import create_transition
-from lerobot.types import TransitionKey
 
+from lerobot_teleoperator_spacemouse._lerobot_compat import TransitionKey
 from lerobot_teleoperator_spacemouse.adapter import (
     DEFAULT_SOARM_MOTOR_NAMES,
+    EndEffectorBounds,
     EndEffectorToJoints,
     GripperVelocityToPosition,
     SpaceMouseAdapterConfig,
     SpaceMouseDeltaToEndEffector,
     resolve_kinematics_config,
+    robot_accepts_direct_eef,
 )
 
 
@@ -103,6 +105,34 @@ def test_delta_to_end_effector_integrates_enabled_target():
     assert second["ee.x"] == 0.12
 
 
+def test_delta_target_does_not_wind_up_past_workspace_limit():
+    step = SpaceMouseDeltaToEndEffector(
+        kinematics=FakeKinematics(),
+        motor_names=DEFAULT_SOARM_MOTOR_NAMES,
+        translation_step_m=0.01,
+        rotation_step_rad=0.1,
+        workspace_max=[0.11, 1.0, 1.0],
+    )
+    action = {
+        "enabled": True,
+        "target_x": 1.0,
+        "target_y": 0.0,
+        "target_z": 0.0,
+        "target_wx": 0.0,
+        "target_wy": 0.0,
+        "target_wz": 0.0,
+        "gripper_vel": 0.0,
+    }
+
+    for _ in range(3):
+        at_limit = step(create_transition(observation=observation(), action=action))[TransitionKey.ACTION]
+    assert at_limit["ee.x"] == 0.11
+
+    action["target_x"] = -1.0
+    reversed_output = step(create_transition(observation=observation(), action=action))[TransitionKey.ACTION]
+    assert reversed_output["ee.x"] == 0.1
+
+
 def test_disabled_input_holds_current_joints_without_ik():
     delta = SpaceMouseDeltaToEndEffector(
         kinematics=NoIkKinematics(),
@@ -173,3 +203,37 @@ def test_gripper_and_ik_emit_soarm_joint_action():
     assert output["shoulder_lift.pos"] == 0.5
     assert output["elbow_flex.pos"] == 0.6
     assert output["gripper.pos"] == 7.0
+
+
+def test_disabled_input_resets_bounds_without_changing_hold_pose():
+    bounds = EndEffectorBounds(
+        workspace_min=[0.0, 0.0, 0.0],
+        workspace_max=[1.0, 1.0, 1.0],
+        max_ee_step_m=0.02,
+    )
+    enabled = {"enabled": True, "ee.x": 0.5, "ee.y": 0.5, "ee.z": 0.5}
+    bounds(create_transition(observation={}, action=enabled))
+
+    disabled = {"enabled": False, "ee.x": 1.2, "ee.y": 0.5, "ee.z": 0.5}
+    held = bounds(create_transition(observation={}, action=disabled))[TransitionKey.ACTION]
+
+    assert held["ee.x"] == 1.2
+
+    resumed = {"enabled": True, "ee.x": 0.8, "ee.y": 0.5, "ee.z": 0.5}
+    output = bounds(create_transition(observation={}, action=resumed))[TransitionKey.ACTION]
+    assert output["ee.x"] == 0.8
+
+
+def test_direct_eef_auto_detection_requires_observation_pose():
+    required = dict.fromkeys(("ee.x", "ee.y", "ee.z", "ee.wx", "ee.wy", "ee.wz"), float)
+
+    class RobotWithActionOnly:
+        action_features = required
+        observation_features = {}
+
+    class RobotWithPoseFeedback:
+        action_features = required
+        observation_features = required
+
+    assert robot_accepts_direct_eef(RobotWithActionOnly()) is False
+    assert robot_accepts_direct_eef(RobotWithPoseFeedback()) is True

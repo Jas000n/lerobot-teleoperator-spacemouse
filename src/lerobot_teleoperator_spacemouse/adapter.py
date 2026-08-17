@@ -3,19 +3,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from lerobot.model import RobotKinematics
-from lerobot.processor import (
-    RobotAction,
-    RobotActionProcessorStep,
-    RobotObservation,
-    RobotProcessorPipeline,
-    TransitionKey,
+from lerobot.model.kinematics import RobotKinematics
+from lerobot.processor.converters import (
     robot_action_observation_to_transition,
     transition_to_robot_action,
 )
 from lerobot.robots.robot import Robot
 from lerobot.utils.rotation import Rotation
 
+from ._lerobot_compat import (
+    RobotAction,
+    RobotActionProcessorStep,
+    RobotObservation,
+    RobotProcessorPipeline,
+    TransitionKey,
+)
 from .profiles import DEFAULT_SOARM_MOTOR_NAMES, bundled_urdf_path, get_kinematics_profile
 
 __all__ = [
@@ -134,11 +136,17 @@ class SpaceMouseDeltaToEndEffector(RobotActionProcessorStep):
         motor_names: list[str],
         translation_step_m: float,
         rotation_step_rad: float,
+        workspace_min: list[float] | None = None,
+        workspace_max: list[float] | None = None,
+        max_ee_step_m: float = 0.0,
     ):
         self.kinematics = kinematics
         self.motor_names = motor_names
         self.translation_step_m = translation_step_m
         self.rotation_step_rad = rotation_step_rad
+        self.workspace_min = np.asarray(workspace_min, dtype=float) if workspace_min is not None else None
+        self.workspace_max = np.asarray(workspace_max, dtype=float) if workspace_max is not None else None
+        self.max_ee_step_m = max_ee_step_m
         self._target: np.ndarray | None = None
 
     def action(self, action: RobotAction) -> RobotAction:
@@ -164,6 +172,9 @@ class SpaceMouseDeltaToEndEffector(RobotActionProcessorStep):
                 ],
                 dtype=float,
             )
+            delta_norm = float(np.linalg.norm(delta_p))
+            if self.max_ee_step_m > 0.0 and delta_norm > self.max_ee_step_m:
+                delta_p = delta_p * (self.max_ee_step_m / delta_norm)
             delta_r = np.asarray(
                 [
                     float(action.get("target_wx", 0.0)) * self.rotation_step_rad,
@@ -173,6 +184,10 @@ class SpaceMouseDeltaToEndEffector(RobotActionProcessorStep):
                 dtype=float,
             )
             self._target[:3, 3] = self._target[:3, 3] + delta_p
+            if self.workspace_min is not None or self.workspace_max is not None:
+                min_v = self.workspace_min if self.workspace_min is not None else -np.inf
+                max_v = self.workspace_max if self.workspace_max is not None else np.inf
+                self._target[:3, 3] = np.clip(self._target[:3, 3], min_v, max_v)
             self._target[:3, :3] = self._target[:3, :3] @ Rotation.from_rotvec(delta_r).as_matrix()
             desired = self._target
 
@@ -269,6 +284,14 @@ class EndEffectorBounds(RobotActionProcessorStep):
         self._last_pos: np.ndarray | None = None
 
     def action(self, action: RobotAction) -> RobotAction:
+        # Disabled input means "hold the measured pose". Do not clamp or rate-limit
+        # that pose: direct-EEF robots may not expose the internal ``enabled`` key,
+        # and retaining the old position here would also make the next enable start
+        # from a stale limiter state.
+        if not bool(action.get("enabled", True)):
+            self._last_pos = None
+            return action
+
         pos = np.asarray([float(action["ee.x"]), float(action["ee.y"]), float(action["ee.z"])], dtype=float)
         if self.workspace_min is not None or self.workspace_max is not None:
             min_v = self.workspace_min if self.workspace_min is not None else -np.inf
@@ -393,8 +416,8 @@ class FilterActionKeys(RobotActionProcessorStep):
 
 
 def robot_accepts_direct_eef(robot: Robot) -> bool:
-    keys = set(robot.action_features)
-    return {"ee.x", "ee.y", "ee.z", "ee.wx", "ee.wy", "ee.wz"}.issubset(keys)
+    required = {"ee.x", "ee.y", "ee.z", "ee.wx", "ee.wy", "ee.wz"}
+    return required.issubset(robot.action_features) and required.issubset(robot.observation_features)
 
 
 def make_spacemouse_robot_action_processor(
@@ -420,7 +443,7 @@ def make_spacemouse_robot_action_processor(
                 max_ee_step_m=cfg.max_ee_step_m,
             )
         )
-        if "ee.gripper_pos" in robot.action_features:
+        if "ee.gripper_pos" in robot.action_features and "ee.gripper_pos" in robot.observation_features:
             steps.append(
                 GripperVelocityToPosition(
                     gripper_key="ee.gripper_pos",
@@ -444,6 +467,9 @@ def make_spacemouse_robot_action_processor(
                     motor_names=kinematics_cfg.motor_names,
                     translation_step_m=cfg.translation_step_m,
                     rotation_step_rad=cfg.rotation_step_rad,
+                    workspace_min=cfg.workspace_min,
+                    workspace_max=cfg.workspace_max,
+                    max_ee_step_m=cfg.max_ee_step_m,
                 ),
                 EndEffectorBounds(
                     workspace_min=cfg.workspace_min,
