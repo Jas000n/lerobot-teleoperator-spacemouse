@@ -8,6 +8,8 @@ A [LeRobot](https://github.com/huggingface/lerobot) plugin that turns a [3Dconne
 
 Push the puck to move the end-effector in X/Y/Z. Tilt/twist to rotate. Press the side buttons to open or close the gripper. Works out of the box with SO-101 / SO-ARM follower robots via built-in inverse kinematics, and supports any custom URDF through a profile API.
 
+SpaceMouse teleoperation is particularly useful for fine-grained manipulation: its compact form factor and incremental Cartesian input allow precise end-effector adjustments without the workspace and hardware footprint of a conventional leader arm.
+
 ---
 
 ## Features
@@ -36,7 +38,7 @@ stay aligned with LeRobot rather than be relaxed independently.
 This release is tested with both LeRobot 0.5 and 0.6. Future LeRobot minor releases are added to the
 supported range after their API compatibility has been verified.
 
-SO-101 / SO-ARM IK support is included by default. For other robot families (e.g. Dynamixel-based arms), register a custom kinematics profile — see [Extending to Other Robots](#extending-to-other-robots).
+SO-101 / SO-ARM IK support is included by default. Other URDF-described robots can be used by providing a custom kinematics profile — see [Extending to Other Robots](#extending-to-other-robots).
 
 ---
 
