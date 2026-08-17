@@ -6,6 +6,8 @@ from lerobot_teleoperator_spacemouse.config import SpaceMouseTeleopConfig
 from lerobot_teleoperator_spacemouse.spacemouse import (
     SpaceMouseTeleop,
     apply_deadzone,
+    list_connected_devices,
+    open_spacemouse_device,
     read_latest_state,
     state_to_action,
 )
@@ -61,6 +63,15 @@ def test_state_to_action_stops_stale_input():
     }
 
 
+def test_idle_enabled_applies_to_fresh_zero_state():
+    cfg = SpaceMouseTeleopConfig(deadzone=0.0, idle_enabled=True)
+    state = SimpleNamespace(t=1.0, x=0.0, y=0.0, z=0.0, roll=0.0, pitch=0.0, yaw=0.0, button=[])
+
+    action = state_to_action(state, cfg, now=1.01)
+
+    assert action["enabled"] is True
+
+
 def test_read_latest_state_drains_until_timestamp_stops():
     states = [
         SimpleNamespace(t=1.0, x=1.0),
@@ -112,3 +123,47 @@ def test_connect_explains_hidraw_permissions(monkeypatch):
     teleop = SpaceMouseTeleop(SpaceMouseTeleopConfig())
     with pytest.raises(PermissionError, match="hidraw permissions"):
         teleop.connect()
+
+
+def test_open_supports_device_paths_on_both_pyspacemouse_apis():
+    class NewDriver:
+        @staticmethod
+        def open_by_path(path):
+            return ("new", path)
+
+    class OldDriver:
+        @staticmethod
+        def open(*, path):
+            return ("old", path)
+
+    assert open_spacemouse_device(NewDriver, "/dev/hidraw2") == ("new", "/dev/hidraw2")
+    assert open_spacemouse_device(OldDriver, "/dev/hidraw2") == ("old", "/dev/hidraw2")
+
+
+def test_old_pyspacemouse_exception_gets_permission_hint():
+    class OldDriver:
+        @staticmethod
+        def open(device=None):
+            del device
+            raise Exception("Failed to open device")
+
+    with pytest.raises(PermissionError, match="hidraw permissions"):
+        open_spacemouse_device(OldDriver)
+
+
+def test_list_connected_devices_supports_both_pyspacemouse_apis():
+    new_driver = SimpleNamespace(get_connected_devices=lambda: ["SpaceMouse Compact"])
+    old_driver = SimpleNamespace(list_devices=lambda: ["SpaceNavigator"])
+
+    assert list_connected_devices(new_driver) == ["SpaceMouse Compact"]
+    assert list_connected_devices(old_driver) == ["SpaceNavigator"]
+
+
+def test_list_connected_devices_explains_missing_hidapi():
+    def missing_hidapi():
+        raise RuntimeError("HID API is probably not installed")
+
+    driver = SimpleNamespace(get_connected_devices=missing_hidapi)
+
+    with pytest.raises(RuntimeError, match="conda install -c conda-forge libhidapi"):
+        list_connected_devices(driver)

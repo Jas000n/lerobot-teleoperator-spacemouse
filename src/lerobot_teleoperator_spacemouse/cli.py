@@ -1,7 +1,11 @@
 import argparse
 import time
 
-from lerobot_teleoperator_spacemouse.spacemouse import open_spacemouse_device, read_latest_state
+from lerobot_teleoperator_spacemouse.spacemouse import (
+    list_connected_devices,
+    open_spacemouse_device,
+    read_latest_state,
+)
 
 
 def test_main() -> None:
@@ -14,9 +18,12 @@ def test_main() -> None:
 
     import pyspacemouse
 
-    devices = pyspacemouse.list_devices() if hasattr(pyspacemouse, "list_devices") else []
-    print(f"Detected devices: {devices}")
-    device = open_spacemouse_device(pyspacemouse, args.device)
+    try:
+        devices = list_connected_devices(pyspacemouse)
+        print(f"Detected devices: {devices}")
+        device = open_spacemouse_device(pyspacemouse, args.device)
+    except (ConnectionError, PermissionError, RuntimeError) as exc:
+        raise SystemExit(str(exc)) from None
     if device is None:
         raise SystemExit("No supported SpaceMouse device found.")
 

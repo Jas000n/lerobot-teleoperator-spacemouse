@@ -4,9 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lerobot_teleoperator_spacemouse"
-version = "0.1.4"
+version = "0.1.5"
 description = "SpaceMouse teleoperation plugin and Cartesian control adapters for LeRobot."
 readme = "README.md"
+# LeRobot 0.5+ has the same minimum; lowering this does not make the
+# combined environment installable on an older Python.
 requires-python = ">=3.12"
 license = "Apache-2.0"
 authors = [
@@ -22,7 +24,7 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [
-    "lerobot[feetech,kinematics]>=0.5.0",
+    "lerobot[feetech,kinematics]>=0.5.0,<0.7.0",
     "numpy>=2.0.0",
     "pyspacemouse>=1.1.5,<3.0.0",
 ]

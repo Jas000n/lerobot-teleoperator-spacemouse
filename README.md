@@ -31,6 +31,13 @@ SpaceMouse teleoperation is particularly useful for fine-grained manipulation: i
 pip install lerobot-teleoperator-spacemouse
 ```
 
+Python 3.12 or newer is required because the supported LeRobot releases (`>=0.5.0,<0.7.0`) require it too.
+The plugin does not otherwise depend on Python-3.12-specific behavior, so its Python requirement should
+stay aligned with LeRobot rather than be relaxed independently.
+
+This release is tested with both LeRobot 0.5 and 0.6. Future LeRobot minor releases are added to the
+supported range after their API compatibility has been verified.
+
 SO-101 / SO-ARM IK support is included by default. Other URDF-described robots can be used by providing a custom kinematics profile — see [Extending to Other Robots](#extending-to-other-robots).
 
 ---
@@ -83,7 +90,7 @@ All options are set via `--teleop.<option>` or `--teleop.adapter.<option>` on th
 
 | Option | Default | Description |
 |---|---|---|
-| `device` | `None` | HID device path. Auto-detected when `None`. |
+| `device` | `None` | Device name or HID device path. Auto-detected when `None`. |
 | `deadzone` | `0.08` | Ignore inputs below this fraction of full deflection. |
 | `rescale_after_deadzone` | `True` | Rescale remaining range to `[0, 1]` after deadzone. |
 | `max_axis_value` | `1.0` | Clamp raw axis values to `[-max, max]`. |
@@ -105,6 +112,7 @@ All options are set via `--teleop.<option>` or `--teleop.adapter.<option>` on th
 | `gripper_open_button` | `1` | Button index that opens the gripper. |
 | `gripper_close_button` | `0` | Button index that closes the gripper. |
 | `require_enable_button` | `False` | Require a dedicated button to enable motion. |
+| `enable_button` | `None` | Button index used when `require_enable_button=True`. |
 | `idle_enabled` | `False` | Whether `enabled=True` is sent when the device is idle. |
 
 ### Adapter options (`--teleop.adapter.*`)

@@ -5,8 +5,8 @@ import time
 from typing import Any
 
 from lerobot.teleoperators.teleoperator import Teleoperator
-from lerobot.types import RobotAction
 
+from ._lerobot_compat import RobotAction
 from .config import SpaceMouseTeleopConfig
 
 ACTION_KEYS = (
@@ -93,7 +93,7 @@ def state_to_action(state: Any | None, cfg: SpaceMouseTeleopConfig, *, now: floa
     if cfg.require_enable_button:
         enabled = button_pressed(buttons, cfg.enable_button)
     else:
-        enabled = any(abs(float(action[key])) > 0.0 for key in action)
+        enabled = cfg.idle_enabled or any(abs(float(action[key])) > 0.0 for key in action)
 
     return {"enabled": enabled, **action}
 
@@ -111,20 +111,43 @@ def zero_action(*, enabled: bool = False) -> RobotAction:
     }
 
 
-def explain_open_error(exc: RuntimeError) -> RuntimeError:
+def explain_open_error(exc: Exception) -> Exception:
     message = str(exc)
     if "HID API" in message or "hid_enumerate" in message:
         return RuntimeError(HIDAPI_INSTALL_HINT)
     if "Failed to open device" in message:
         return PermissionError(HIDRAW_PERMISSION_HINT)
+    if "No connected or supported devices" in message or "No found any connected or supported devices" in message:
+        return ConnectionError("No supported SpaceMouse device found.")
     return exc
 
 
 def open_spacemouse_device(driver: Any, device: str | None = None) -> Any:
     try:
+        if device is not None and ("/" in device or "\\" in device):
+            if hasattr(driver, "open_by_path"):
+                return driver.open_by_path(device)
+            return driver.open(path=device)
         return driver.open(device=device)
-    except RuntimeError as exc:
-        raise explain_open_error(exc) from exc
+    except Exception as exc:
+        explained = explain_open_error(exc)
+        if explained is exc:
+            raise
+        raise explained from exc
+
+
+def list_connected_devices(driver: Any) -> list[Any]:
+    for function_name in ("get_connected_devices", "list_devices"):
+        function = getattr(driver, function_name, None)
+        if function is not None:
+            try:
+                return list(function())
+            except Exception as exc:
+                explained = explain_open_error(exc)
+                if explained is exc:
+                    raise
+                raise explained from exc
+    return []
 
 
 def read_latest_state(device: Any, driver: Any | None, max_reads: int) -> Any | None:
@@ -191,11 +214,16 @@ class SpaceMouseTeleop(Teleoperator):
     def connect(self, calibrate: bool = True) -> None:
         del calibrate
         self._driver = importlib.import_module("pyspacemouse")
-        self._device = open_spacemouse_device(self._driver, self.config.device)
+        try:
+            self._device = open_spacemouse_device(self._driver, self.config.device)
+        except ConnectionError as exc:
+            try:
+                devices = list_connected_devices(self._driver)
+            except Exception:
+                devices = []
+            raise ConnectionError(f"No supported SpaceMouse device found. Detected devices: {devices}") from exc
         if self._device is None:
-            devices = []
-            if hasattr(self._driver, "list_devices"):
-                devices = self._driver.list_devices()
+            devices = list_connected_devices(self._driver)
             raise ConnectionError(f"No supported SpaceMouse device found. Detected devices: {devices}")
         self.configure()
 
