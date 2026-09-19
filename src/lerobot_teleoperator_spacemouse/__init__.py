@@ -1,0 +1,18 @@
+"""SpaceMouse teleoperation plugin for LeRobot."""
+
+from .adapter import SpaceMouseAdapterConfig, make_spacemouse_robot_action_processor
+from .config import SpaceMouseTeleopConfig
+from .patches import patch_lerobot_record, patch_lerobot_teleoperate
+from .spacemouse import SpaceMouseTeleop
+
+patch_lerobot_teleoperate()
+patch_lerobot_record()
+
+__all__ = [
+    "SpaceMouseAdapterConfig",
+    "SpaceMouseTeleop",
+    "SpaceMouseTeleopConfig",
+    "make_spacemouse_robot_action_processor",
+    "patch_lerobot_record",
+    "patch_lerobot_teleoperate",
+]
