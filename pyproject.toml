@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lerobot_teleoperator_spacemouse"
-version = "1.1.0"
+version = "1.1.1"
 description = "SpaceMouse teleoperation plugin and Cartesian control adapters for LeRobot."
 readme = "README.md"
 # LeRobot 0.5+ has the same minimum; lowering this does not make the
