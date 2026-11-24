@@ -27,6 +27,10 @@ classifiers = [
 # (.github/workflows/tests.yml). LeRobot minor releases do break plugins.
 dependencies = [
     "lerobot[feetech,kinematics]>=0.5.0,<0.8.0",
+    # Not imported directly. placo's wheels link against urdfdom 4, but LeRobot 0.5 does not pin it,
+    # so a fresh install there picks cmeel-urdfdom 6 and `import placo` fails. LeRobot 0.6+ pins these.
+    "cmeel-urdfdom>=4,<5",
+    "cmeel-tinyxml2<11",
     "numpy>=2.0.0",
     "pyspacemouse>=1.1.5,<3.0.0",
 ]
