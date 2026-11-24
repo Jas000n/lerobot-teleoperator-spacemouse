@@ -1,6 +1,7 @@
 # lerobot-teleoperator-spacemouse
 
 [![PyPI](https://img.shields.io/pypi/v/lerobot-teleoperator-spacemouse)](https://pypi.org/project/lerobot-teleoperator-spacemouse/)
+[![Tests](https://github.com/Jas000n/lerobot-teleoperator-spacemouse/actions/workflows/tests.yml/badge.svg)](https://github.com/Jas000n/lerobot-teleoperator-spacemouse/actions/workflows/tests.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/pypi/pyversions/lerobot-teleoperator-spacemouse)](https://pypi.org/project/lerobot-teleoperator-spacemouse/)
 
@@ -39,6 +40,9 @@ pip install lerobot-teleoperator-spacemouse
 
 LeRobot automatically discovers the installed plugin, so `--teleop.type=spacemouse` is available to
 both `lerobot-teleoperate` and `lerobot-record` without a separate recording extra.
+
+Supports LeRobot 0.5, 0.6 and 0.7. CI tests each release against the real `lerobot-teleoperate` and
+`lerobot-record` loops.
 
 
 
@@ -288,6 +292,15 @@ cd lerobot-teleoperator-spacemouse
 pip install -e ".[dev]"
 pytest
 ```
+
+CI runs the tests against every LeRobot release in the supported range, plus a weekly canary against
+LeRobot's main branch. `tests/test_lerobot_integration.py` drives the real `lerobot-teleoperate` and
+`lerobot-record` loops with a fake SpaceMouse and follower, so a LeRobot change to the loops this
+plugin hooks into fails there instead of on a robot.
+
+The LeRobot upper bound in `pyproject.toml` is raised one minor release at a time: add the new
+release to the CI matrix, get it passing, check it on hardware (LeRobot's IK can change between
+releases, as it did in 0.7), then raise the bound and publish.
 
 
 ---

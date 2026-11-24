@@ -1,6 +1,8 @@
 import sys
 from types import SimpleNamespace
 
+import pytest
+
 from lerobot_teleoperator_spacemouse import patches
 
 
@@ -115,7 +117,16 @@ def test_record_patch_converts_before_dataset_action_is_captured(monkeypatch):
 def test_record_patch_leaves_other_teleoperators_unchanged(monkeypatch):
     received = {}
 
-    def original_loop(teleop, robot, teleop_action_processor):
+    def original_loop(
+        robot,
+        events,
+        fps,
+        teleop_action_processor,
+        robot_action_processor,
+        robot_observation_processor,
+        dataset=None,
+        teleop=None,
+    ):
         received["teleop_action_processor"] = teleop_action_processor
 
     module = SimpleNamespace(record_loop=original_loop)
@@ -131,7 +142,11 @@ def test_record_patch_leaves_other_teleoperators_unchanged(monkeypatch):
     module.record_loop(
         teleop=SimpleNamespace(name="so101_leader"),
         robot=object(),
+        events={},
+        fps=30,
         teleop_action_processor=original_processor,
+        robot_action_processor=object(),
+        robot_observation_processor=object(),
     )
 
     assert received["teleop_action_processor"] is original_processor
@@ -140,7 +155,16 @@ def test_record_patch_leaves_other_teleoperators_unchanged(monkeypatch):
 def test_record_patch_preserves_default_none_teleop(monkeypatch):
     received = {}
 
-    def original_loop(robot, teleop_action_processor, teleop=None):
+    def original_loop(
+        robot,
+        events,
+        fps,
+        teleop_action_processor,
+        robot_action_processor=None,
+        robot_observation_processor=None,
+        dataset=None,
+        teleop=None,
+    ):
         received.update(teleop=teleop, teleop_action_processor=teleop_action_processor)
 
     module = SimpleNamespace(record_loop=original_loop)
@@ -148,7 +172,7 @@ def test_record_patch_preserves_default_none_teleop(monkeypatch):
 
     patches.patch_lerobot_record()
     original_processor = object()
-    module.record_loop(robot=object(), teleop_action_processor=original_processor)
+    module.record_loop(robot=object(), events={}, fps=30, teleop_action_processor=original_processor)
 
     assert received == {"teleop": None, "teleop_action_processor": original_processor}
 
@@ -190,3 +214,42 @@ def test_record_patch_supports_positional_arguments_after_lerobot_decorator(monk
         "teleop": teleop,
         "teleop_action_processor": replacement,
     }
+
+
+def test_teleop_patch_warns_when_lerobot_drops_the_loop(monkeypatch):
+    monkeypatch.setitem(sys.modules, "lerobot.scripts.lerobot_teleoperate", SimpleNamespace())
+
+    with pytest.warns(RuntimeWarning, match="could not hook lerobot-teleoperate: it has no teleop_loop"):
+        patches.patch_lerobot_teleoperate()
+
+
+def test_teleop_patch_warns_and_leaves_loop_alone_when_an_argument_is_renamed(monkeypatch):
+    def original_loop(teleoperator, robot, robot_action_processor):
+        return "unchanged"
+
+    module = SimpleNamespace(teleop_loop=original_loop)
+    monkeypatch.setitem(sys.modules, "lerobot.scripts.lerobot_teleoperate", module)
+
+    with pytest.warns(RuntimeWarning, match="teleop_loop\\(\\) has no teleop argument"):
+        patches.patch_lerobot_teleoperate()
+
+    assert module.teleop_loop is original_loop
+    assert not getattr(module, "_spacemouse_patch_applied", False)
+
+
+def test_record_patch_warns_when_lerobot_moves_an_argument_behind_its_decorator(monkeypatch):
+    # The decorator hides the signature, so a moved argument would otherwise be read from the
+    # wrong position and the wrong argument replaced.
+    def original_loop(robot, events, fps, teleop_action_processor, robot_action_processor, teleop=None):
+        return "unchanged"
+
+    def decorated_loop(*args, **kwargs):
+        return original_loop(*args, **kwargs)
+
+    module = SimpleNamespace(record_loop=decorated_loop)
+    monkeypatch.setitem(sys.modules, "lerobot.scripts.lerobot_record", module)
+
+    with pytest.warns(RuntimeWarning, match="record_loop\\(\\) no longer takes teleop where expected"):
+        patches.patch_lerobot_record()
+
+    assert module.record_loop is decorated_loop

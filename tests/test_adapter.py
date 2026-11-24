@@ -329,18 +329,18 @@ def test_hold_mode_uses_one_command_source_so_idle_frames_do_not_jump():
 def _virtual_leader(**kwargs):
     from lerobot_teleoperator_spacemouse.adapter import VirtualLeaderArm
 
-    defaults = dict(
-        kinematics=FakeKinematics(),
-        motor_names=list(DEFAULT_SOARM_MOTOR_NAMES),
-        gripper_name="gripper",
-        translation_step_m=0.01,
-        rotation_step_rad=0.1,
-        gripper_speed_factor=2.0,
-        gripper_min=0.0,
-        gripper_max=100.0,
-        position_weight=1.0,
-        orientation_weight=0.01,
-    )
+    defaults = {
+        "kinematics": FakeKinematics(),
+        "motor_names": list(DEFAULT_SOARM_MOTOR_NAMES),
+        "gripper_name": "gripper",
+        "translation_step_m": 0.01,
+        "rotation_step_rad": 0.1,
+        "gripper_speed_factor": 2.0,
+        "gripper_min": 0.0,
+        "gripper_max": 100.0,
+        "position_weight": 1.0,
+        "orientation_weight": 0.01,
+    }
     return VirtualLeaderArm(**{**defaults, **kwargs})
 
 

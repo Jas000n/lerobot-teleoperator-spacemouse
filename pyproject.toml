@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lerobot_teleoperator_spacemouse"
-version = "0.1.1"
+version = "1.1.0"
 description = "SpaceMouse teleoperation plugin and Cartesian control adapters for LeRobot."
 readme = "README.md"
 # LeRobot 0.5+ has the same minimum; lowering this does not make the
@@ -23,8 +23,10 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering",
 ]
+# The LeRobot upper bound is raised one minor release at a time, once CI passes against it
+# (.github/workflows/tests.yml). LeRobot minor releases do break plugins.
 dependencies = [
-    "lerobot[feetech,kinematics]>=0.5.0,<0.7.0",
+    "lerobot[feetech,kinematics]>=0.5.0,<0.8.0",
     "numpy>=2.0.0",
     "pyspacemouse>=1.1.5,<3.0.0",
 ]
@@ -32,6 +34,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "build>=1.2.0,<2.0.0",
+    # tests/test_lerobot_integration.py imports lerobot-record, which needs it from LeRobot 0.6 on.
+    "lerobot[dataset]",
     "pytest>=8.0.0,<9.0.0",
     "ruff>=0.6.0",
     "twine>=6.0.0,<7.0.0",

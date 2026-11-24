@@ -624,10 +624,13 @@ class VirtualLeaderArm(RobotActionProcessorStep):
     deltas on that state alone. The measurement is read only to initialise, never to command.
 
     `RobotKinematics` shares one placo model between FK and IK, and `inverse_kinematics` applies
-    `update_kinematics()` *after* solving, so its `current_joint_pos` argument does not seed that
-    solve - whatever configuration the previous `forward_kinematics()` left behind does. Measured
-    against LeRobot 0.6.1, changing only the preceding FK call moves the IK result by 32 degrees.
-    So the FK below is not merely a query: it is what puts the solver on the virtual arm.
+    `update_kinematics()` *after* each solve step, so its `current_joint_pos` argument does not seed
+    the first step - whatever configuration the previous `forward_kinematics()` left behind does.
+    Measured against LeRobot 0.6.1, which takes a single step, changing only the preceding FK call
+    moves the IK result by 32 degrees. LeRobot 0.7 iterates the solve (8 steps), which usually
+    washes the stale start out, but not always: in 2 of 200 random trials the result still moved by
+    up to 89 degrees. So the FK below is not merely a query: it is what puts the solver on the
+    virtual arm.
     """
 
     def __init__(

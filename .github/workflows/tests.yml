@@ -1,0 +1,66 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Mondays: catch a change on LeRobot's main branch that breaks the plugin before it is released.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.4.0
+      # Pinned so a new ruff release cannot fail CI with rules nobody chose.
+      - run: uvx ruff@0.17.6 check .
+
+  test:
+    name: lerobot ${{ matrix.lerobot }} / python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12"]
+        # Every release in the supported LeRobot range (pyproject.toml). Add the next minor
+        # release here, and get it passing, before raising the upper bound.
+        lerobot: ["0.5.0", "0.5.1", "0.6.1", "0.7.0"]
+        include:
+          - python: "3.13"
+            lerobot: "0.7.0"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          python-version: ${{ matrix.python }}
+          activate-environment: true
+      - name: Install
+        run: uv pip install --torch-backend cpu -e ".[dev]" "lerobot[feetech,kinematics]==${{ matrix.lerobot }}"
+      - name: Test
+        run: pytest -q
+
+  lerobot-main:
+    # Canary for the next LeRobot release. The plugin is installed without its LeRobot pin, which
+    # main may already be ahead of. A failure here is advance warning, not a broken release.
+    name: lerobot main (canary)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.4.0
+        with:
+          python-version: "3.12"
+          activate-environment: true
+      - name: Install
+        run: |
+          uv pip install --torch-backend cpu \
+            "lerobot[feetech,kinematics,dataset] @ git+https://github.com/huggingface/lerobot.git" \
+            "pyspacemouse>=1.1.5,<3.0.0" "pytest>=8.0.0,<9.0.0"
+          uv pip install --no-deps -e .
+      - name: Test
+        run: pytest -q
